@@ -3,10 +3,32 @@ import cv2
 from tkinter import *
 from PIL import Image, ImageTk
 from tkinter import filedialog
-from tkinter import ttk
+from tkinter import messagebox
+import os
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 # Pretvaranje podataka u binarni string
 # Za svaku vrstu podataka "data" (string, byte, niz, integer) funkcijom format() vrši se pretvorba svakog znaka u 8-bitni binarni oblik te se on povezuje s funkcijom join().
+
+
+root = Tk()
+root.title("Steganography - Hide a Secret Message in an Image")
+root.geometry("700x500+150+180")
+root.resizable(False, False)
+root.configure(bg="#2f4155")
+
+
+def showimage():
+    global filename
+    filename = filedialog.askopenfilename(initialdir=os.getcwd(),
+                                          title="Select Image File",
+                                          filetype=(("PNG file", "*.png"),
+                                                    ("JPG file", "*.jpg"),
+                                                    ("All file", ".txt")))
+    img = Image.open(filename)
+    img = ImageTk.PhotoImage(img)
+    lbl.configure(image=img, width=250, height=250)
+    lbl.image = img
 
 
 def to_binary(data):
@@ -19,9 +41,23 @@ def to_binary(data):
     else:
         raise TypeError(" This type of data is not supported!\n")
 
+# SAVE IMAGE
 
-def encode(name, secret):
 
+def save_image():
+    encoded_image = encode_input()
+    print(secret)
+    name = os.path.splitext(os.path.basename(filename))[0]
+
+    cv2.imwrite("hidden_" + name + ".png", encoded_image)
+
+# HIDE DATA
+
+
+def encode_input():
+    global secret
+    secret = text1.get(1.0, END)
+    name = filename
     # funkcija imread() sprema sliku u obliku matrice piksela u varijablu "image"
     image = cv2.imread(name)
 
@@ -79,42 +115,130 @@ def encode(name, secret):
     return image
 
 
-image_display_size = 150, 150
+def get_f_key():
+    messagebox.showinfo("pop-up", "hello world")
+
+# SHOW DATA
 
 
-def on_click():
-    global path_image
-    # use the tkinter filedialog library to open the file using a dialog box.
-    # obtain the image of the path
-    path_image = filedialog.askopenfilename()
-    # load the image using the path
-    load_image = Image.open(path_image)
-    # set the image into the GUI using the thumbnail function from tkinter
-    load_image.thumbnail(image_display_size, Image.ANTIALIAS)
-    # load the image as a numpy array for efficient computation and change the type to unsigned integer
-    np_load_image = np.asarray(load_image)
-    np_load_image = Image.fromarray(np.uint8(np_load_image))
-    render = ImageTk.PhotoImage(np_load_image)
-    img = Label(app, image=render)
-    img.image = render
-    img.place(x=210, y=60)
+def show_decoded():
+    # get_f_key()
+    decoded_data = decode_input()
+    # print("Decoded data: ", decoded_data)
+    text1.insert(END, decoded_data)
+
+# GET DECODED DATA
 
 
-# GUI
-# Defined the TKinter object app with background lavender, title Encrypt, and app size 600*600 pixels.
-app = Tk()
-app.configure(background='black')
-app.title("Encrypt")
-app.geometry('600x600')
-# create a button for calling the function on_click
-on_click_button = Button(app, text="Choose Image", command=on_click)
-on_click_button.place(x=250, y=10)
+def decode_input():
+    print(" Decoding secret data from image...")
 
-# add a text box using tkinter's Text function and place it at (340,55). The text box is of height 165pixels.
-txt = Text(app, wrap=WORD, width=60)
-txt.place(x=50, y=250, height=80)
+    image = cv2.imread(filename)
 
-encrypt_button = Button(app, text="Encode", bg='white',
-                        fg='black', command=encode("image.png", "string"))
-encrypt_button.place(x=435, y=350)
-app.mainloop()
+    binary_result = ""
+    decoded_data = ""
+
+    for row in image:
+        for pixel in row:
+            r, g, b = to_binary(pixel)
+
+            # dodajemo zadnji bit (znak) svakog od komponenti piksela
+            binary_result += r[-1]
+            binary_result += g[-1]
+            binary_result += b[-1]
+
+    # pretvaramo rezultat u bajtove
+    # range(start, stop, step)
+    bytes_result = [binary_result[i:i+8]
+                    for i in range(0, len(binary_result), 8)]
+
+    # izdvajamo znak iz svakog bajta koji smo dobili
+    for byte in bytes_result:
+        decoded_data += chr(int(byte, 2))
+
+        # provjera jel od 5og elementa odzada do kraja ovaj string
+        # i ako je, prestajemo s dekodiranjem
+        if decoded_data[-5:] == "=====":
+            break
+    # vraćamo sve od početka do 5og elementa odzada
+    return decoded_data[:-5]
+
+
+# ikona u kantunu (ovo nije toliko bitno)
+image_icon = PhotoImage(file="icon.png")
+root.iconphoto(False, image_icon)
+
+
+# ADD FILE
+def add_file():
+    global textfile
+    textfile = filedialog.askopenfilename(initialdir=os.getcwd(),
+                                          title="Select text file",
+                                          filetype=(("TXT file", ".txt"),
+                                                    ("All file", ".txt")))
+
+    with open(textfile, "rb") as text:
+        secret = text.read()
+
+    text1.insert(END, secret)
+
+
+# logo
+# subsample označava smanjenje slike na zeljenu velicinu
+logo = PhotoImage(file="icon.png").subsample(1, 1)
+Label(root, image=logo, bg="#2f4155").place(x=15, y=10)
+
+Label(root, text="CYBER SCIENCE", bg="#2d4155",
+      fg="white", font="arial 25 bold").place(x=100, y=20)
+
+
+# First frame
+f = Frame(root, bd=3, bg="black", width=340, height=280, relief=GROOVE)
+f.place(x=10, y=80)
+
+lbl = Label(f, bg="black")
+lbl.place(x=40, y=10)
+
+
+# Second frame
+frame2 = Frame(root, bd=3, width=340, height=280, bg="white", relief=GROOVE)
+frame2.place(x=350, y=80)
+
+Label(frame2, text="Add text").place(x=350, y=80)
+text1 = Text(frame2, font="Roboto 20", bg="white",
+             fg="black", relief=GROOVE, wrap=WORD)
+text1.place(x=0, y=0, width=320, height=295)
+
+
+scrollbar1 = Scrollbar(frame2)
+scrollbar1.place(x=320, y=0, height=300)
+
+scrollbar1.configure(command=text1.yview)
+text1.configure(yscrollcommand=scrollbar1.set)
+
+
+# Third frame
+frame3 = Frame(root, bd=3, bg="#2f4155", width=330, height=100, relief=GROOVE)
+frame3.place(x=10, y=370)
+
+Button(frame3, text="Open Image", width=10, height=2,
+       font="airal 14 bold", command=showimage).place(x=20, y=30)
+Button(frame3, text="Encode Image", width=10, height=2,
+       font="airal 14 bold", command=save_image).place(x=180, y=30)
+Label(frame3, text="Picture, Image, Photo File",
+      bg="#2f4155", fg="yellow").place(x=20, y=5)
+
+
+# Fourth frame
+frame4 = Frame(root, bd=3, bg="#2f4155", width=330, height=100, relief=GROOVE)
+frame4.place(x=360, y=370)
+
+Button(frame4, text="Add File", width=10, height=2,
+       font="airal 14 bold", command=add_file).place(x=20, y=30)
+Button(frame4, text="Decode", width=10, height=2,
+       font="airal 14 bold", command=show_decoded).place(x=180, y=30)
+Label(frame4, text="Picture, Image, Photo File",
+      bg="#2f4155", fg="yellow").place(x=20, y=5)
+
+
+root.mainloop()
